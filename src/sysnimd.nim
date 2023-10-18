@@ -3,6 +3,7 @@
 import std/asyncdispatch
 import std/tables
 import std/sets
+import std/deques
 import std/strutils
 import std/macros
 
@@ -52,12 +53,13 @@ type
 
   UnitDB* = ref object
     unitTable: Table[UnitName, Unit]
+    waitPool: Deque[Unit]
 
 var unitDB = new UnitDB
 
 proc `$`*(name: UnitName): string = name.str
 template await*(unit: Unit) =
-  if unit.current != nil:
+  if unit.status == Running:
     await unit.current
 
 proc register*(unit: Unit) =
@@ -107,10 +109,14 @@ proc enable*(name: UnitName) =
 method execute*(self: Unit): Future[void] {.base.} =
   discard
 
+proc start*(self: Unit): Future[void] {.async.}
+proc launch(unit: Unit) =
+  if unit.status == Ready:
+    unitDB.waitPool.addlast unit
+    discard start unit
+
 proc start*(self: Unit): Future[void] {.async.} =
   if self.status != Ready: return self.current
-  proc launch(unit: Unit) =
-    discard start unit
 
   self.current = newFuture[void]("start")
   result = self.current
@@ -132,8 +138,6 @@ proc start*(self: Unit): Future[void] {.async.} =
 
   let selftask = execute self
   if selftask != nil: await selftask
-
-  for unit in Parallel: await unit
 
   complete result
 
@@ -159,9 +163,13 @@ proc install* =
 
     for before in unit.Unit.Before:
       resolve(before).installed.After.incl unit.name
-proc start*: Future[void]  =
+
+proc start* {.async.} =
   install()
-  start "default.target"
+  launch resolve "default.target"
+  while unitDB.waitPool.len > 0:
+    let unit = popFirst unitDB.waitPool
+    await unit
 
 proc defineImpl*(UnitType, name, body: NimNode): NimNode =
   let res = genSym(nskLet, "res")

@@ -1,6 +1,6 @@
 # Package
 
-version       = "1.0.0"
+version       = "1.0.1"
 author        = "la .panon."
 description   = "systemd-like event system"
 license       = "MIT"

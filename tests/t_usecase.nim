@@ -32,7 +32,7 @@ sysnimd.register Service, "post.service":
     echo "done post.service"
 
   [Install]
-  RequiredBy = toHashSet [uname"default.target"]
+  RequiredBy = toHashSet [uname"test.service"]
 
 sysnimd.register Service, "pre.service":
   [Unit]
